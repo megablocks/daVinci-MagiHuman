@@ -218,7 +218,7 @@ python example/modal/run_modal.py \
   --sr_height 512
 ```
 
-By default this script calls `modal_app.py::run_inference` via `modal run` and passes a JSON payload built from the selected `config.json` plus runtime overrides.
+By default this script calls the included `modal_app.py::run_inference` via `modal run` and passes a JSON payload built from the selected `config.json` plus runtime overrides. You can customize `modal_app.py` for your own Modal image, secrets, and execution flow.
 
 > Local/on-prem shell scripts under `example/*/run.sh` are unchanged and remain the recommended path for non-Modal deployments.
 
