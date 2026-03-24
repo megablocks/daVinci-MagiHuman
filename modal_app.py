@@ -93,6 +93,9 @@ def run_inference(
     if config_path:
         cmd.extend(["--config-load-path", config_path])
 
+    # Ensure parent directory exists before ffmpeg writes final artifacts.
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
     print("Running:", " ".join(shlex.quote(x) for x in cmd))
     subprocess.run(cmd, check=True, cwd=REPO_DIR)
 
@@ -124,7 +127,8 @@ def main(
     remote_audio_path = _upload_if_local(audio_path, outputs_volume, f"inputs/{run_id}") if audio_path else None
     remote_config_path = _upload_if_local(config_path, outputs_volume, f"inputs/{run_id}") if config_path else None
 
-    resolved_output_path = output_path or str(Path(OUTPUTS_DIR) / "runs" / run_id)
+    # Default under the volume root, which already exists on fresh mounts.
+    resolved_output_path = output_path or str(Path(OUTPUTS_DIR) / run_id)
     if not resolved_output_path.startswith("/"):
         resolved_output_path = str(Path(OUTPUTS_DIR) / resolved_output_path)
 
