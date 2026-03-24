@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 
 @dataclass(frozen=True)
@@ -91,7 +92,8 @@ def build_run_context(
     ts = timestamp or _utc_timestamp()
     generated_id = run_id
     if generated_id is None:
-        digest = hashlib.sha256(ts.encode("utf-8")).hexdigest()[:8]
+        entropy = f"{ts}-{uuid4().hex}"
+        digest = hashlib.sha256(entropy.encode("utf-8")).hexdigest()[:8]
         generated_id = f"run_{ts}_{digest}"
 
     staging_dir = Path(local_work_root) / generated_id
