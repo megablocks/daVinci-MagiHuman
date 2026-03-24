@@ -66,7 +66,7 @@ PRESET_DEFAULTS = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run inference on Modal using modal_app.py remote function.")
+    parser = argparse.ArgumentParser(description="Run inference on Modal using modal_app.py::run_inference.")
     parser.add_argument(
         "--example",
         choices=sorted(PRESET_CONFIGS.keys()),
@@ -91,7 +91,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output_path", type=str, default=None)
 
-    parser.add_argument("--modal-app-path", type=Path, default=PROJECT_ROOT / "modal_app.py")
+    parser.add_argument(
+        "--modal-app-path",
+        type=Path,
+        default=PROJECT_ROOT / "modal_app.py",
+        help="Path to the Modal app file (default: PROJECT_ROOT/modal_app.py).",
+    )
     parser.add_argument("--modal-function", type=str, default="run_inference")
     parser.add_argument(
         "--modal-bin",
