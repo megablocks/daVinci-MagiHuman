@@ -189,108 +189,38 @@ bash example/sr_1080p/run.sh
 ```
 
 
-## ☁️ Run on Modal (GPU)
+## ☁️ Modal deployment
 
-If you want to run inference on remote GPUs without managing your own CUDA host, you can use [Modal](https://modal.com/) to package this repo and execute jobs on H100/A100 instances.
-
-### Prerequisites
+If you want to run inference through a Modal remote function (instead of local `torchrun`), use the dedicated Python launcher:
 
 ```bash
-pip install modal
-modal setup
+python example/modal/run_modal.py --example base
 ```
 
-`modal setup` opens a browser flow to authenticate your CLI.
+Available presets map directly to existing example configs:
 
-### Create and Attach Modal Volumes
+- `base` → `example/base/config.json`
+- `distill` → `example/distill/config.json`
+- `sr_540p` → `example/sr_540p/config.json`
+- `sr_1080p` → `example/sr_1080p/config.json`
 
-Use two persistent volumes:
-- `davinci-checkpoints`: all model weights/checkpoints referenced by `example/*/config.json`.
-- `davinci-outputs`: generated videos/logs.
+You can keep using the same user-level parameters as the shell scripts, for example:
 
 ```bash
-# Create once
-modal volume create davinci-checkpoints
-modal volume create davinci-outputs
-
-# Optional: inspect
-modal volume ls
+python example/modal/run_modal.py \
+  --example sr_540p \
+  --prompt "$(<example/assets/prompt.txt)" \
+  --image_path example/assets/image.png \
+  --seconds 10 \
+  --br_width 448 \
+  --br_height 256 \
+  --sr_width 896 \
+  --sr_height 512
 ```
 
-Mount them in your Modal app, for example:
+By default this script calls `modal_app.py::run_inference` via `modal run` and passes a JSON payload built from the selected `config.json` plus runtime overrides.
 
-```python
-volumes={
-  "/checkpoints": modal.Volume.from_name("davinci-checkpoints", create_if_missing=True),
-  "/outputs": modal.Volume.from_name("davinci-outputs", create_if_missing=True),
-}
-```
-
-### Expected Checkpoint Directory Layout
-
-The config files in `example/*/config.json` expect paths like `/path/to/checkpoints/...`. On Modal, map those to `/checkpoints/...` and keep this layout:
-
-```text
-/checkpoints/
-├── base/                         # engine_config.load for base/sr configs
-├── distill/                      # engine_config.load for distill config
-├── 540p_sr/                      # evaluation_config.sr_model_path (540p)
-├── 1080p_sr/                     # evaluation_config.sr_model_path (1080p)
-├── stable-audio-open-1.0/        # evaluation_config.audio_model_path
-├── t5/
-│   └── t5gemma-9b-9b-ul2/        # evaluation_config.txt_model_path
-├── wan_vae/
-│   └── Wan2.2-TI2V-5B/           # evaluation_config.vae_model_path
-└── turbo_vae/
-    ├── TurboV3-Wan22-TinyShallow_7_7.json
-    └── checkpoint-340000.ckpt
-```
-
-Before running on Modal, update each `example/*/config.json` path from `/path/to/checkpoints/...` to `/checkpoints/...`.
-
-### Example Commands (Local Entrypoint vs Remote Function)
-
-Assuming you define a Modal app file (for example `modal_app.py`) with both a local entrypoint and a remote function:
-
-```bash
-# Run local entrypoint logic (submits/coordinates jobs)
-modal run modal_app.py::main
-
-# Run remote GPU function directly
-modal run modal_app.py::run_inference
-```
-
-A practical pattern is:
-- `main`: validates args/config and dispatches.
-- `run_inference`: executes `torchrun ... inference/pipeline/entry.py ...` inside the GPU container.
-
-### Recommended GPU Profiles
-
-- **H100 (recommended for best latency):** best throughput and shortest wall-clock time for base + SR runs, but highest hourly cost.
-- **A100 80GB (balanced):** slower than H100 but typically more available and cheaper; good default for production batches.
-- **A100 40GB / smaller GPUs:** possible for base/distill, but SR (especially 1080p) is more likely to hit memory pressure or require longer runtimes.
-
-Rule of thumb: use **H100** for interactive turnaround and **A100** for cost-sensitive batch workloads.
-
-### Troubleshooting
-
-- **Missing CUDA libraries** (`libcuda.so`, `libnvrtc.so`, etc.)
-  - Use a CUDA-enabled base image in Modal and install GPU-compatible PyTorch/Flash-Attention builds.
-  - Confirm your function is declared with a GPU resource (CPU-only functions will fail on CUDA imports).
-
-- **CUDA OOM / out-of-memory**
-  - Start with `example/distill/config.json` (fewer steps) or base 256p first.
-  - Reduce parallelism (`GPUS_PER_NODE=1`, no extra workers), shorten clip length, and avoid SR until stable.
-  - For SR, prefer H100 or A100 80GB.
-
-- **Path mismatch between config and mounted volumes**
-  - Ensure config paths use `/checkpoints/...` exactly as mounted in Modal.
-  - Verify expected files exist in the volume before launch (`modal volume get` / shell inspection).
-
-- **Slow first run (cold start + compile warmup)**
-  - First invocation is slower due to container start, weight load, and model compile/cache initialization.
-  - Keep a warm container (periodic pings) for latency-sensitive workloads; subsequent runs should be much faster.
-
+> Local/on-prem shell scripts under `example/*/run.sh` are unchanged and remain the recommended path for non-Modal deployments.
 
 ## ✍️ Prompt Guidance
  
