@@ -188,6 +188,40 @@ bash example/sr_540p/run.sh
 bash example/sr_1080p/run.sh
 ```
 
+
+## ☁️ Modal deployment
+
+If you want to run inference through a Modal remote function (instead of local `torchrun`), use the dedicated Python launcher:
+
+```bash
+python example/modal/run_modal.py --example base
+```
+
+Available presets map directly to existing example configs:
+
+- `base` → `example/base/config.json`
+- `distill` → `example/distill/config.json`
+- `sr_540p` → `example/sr_540p/config.json`
+- `sr_1080p` → `example/sr_1080p/config.json`
+
+You can keep using the same user-level parameters as the shell scripts, for example:
+
+```bash
+python example/modal/run_modal.py \
+  --example sr_540p \
+  --prompt "$(<example/assets/prompt.txt)" \
+  --image_path example/assets/image.png \
+  --seconds 10 \
+  --br_width 448 \
+  --br_height 256 \
+  --sr_width 896 \
+  --sr_height 512
+```
+
+By default this script calls `modal_app.py::run_inference` via `modal run` and passes a JSON payload built from the selected `config.json` plus runtime overrides.
+
+> Local/on-prem shell scripts under `example/*/run.sh` are unchanged and remain the recommended path for non-Modal deployments.
+
 ## ✍️ Prompt Guidance
  
 daVinci-MagiHuman uses an **Enhanced Prompt** system that rewrites user inputs into detailed performance directions optimized for avatar-style video generation. For the full system prompt specification, see [`prompts/enhanced_prompt_design.md`](prompts/enhanced_prompt_design.md).
