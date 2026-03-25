@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 import time
 from pathlib import Path
@@ -34,10 +35,11 @@ image = (
         "libxext6",
         "libxrender1",
     )
+    .pip_install_from_requirements("requirements.txt")
+    .pip_install("soundfile")
+    .pip_install(*TORCH_PACKAGES, extra_index_url="https://download.pytorch.org/whl/cu124")
     .add_local_dir(".", remote_path=REPO_DIR, copy=True)
     .workdir(REPO_DIR)
-    .pip_install_from_requirements("requirements.txt")
-    .pip_install(*TORCH_PACKAGES, extra_index_url="https://download.pytorch.org/whl/cu124")
 )
 
 app = modal.App(APP_NAME, image=image)
@@ -55,7 +57,6 @@ def _upload_if_local(path: str | None, volume: modal.Volume, remote_subdir: str)
     remote_path = f"{remote_subdir}/{p.name}"
     with volume.batch_upload() as batch:
         batch.put_file(str(p), remote_path)
-    volume.commit()
     return str(Path(OUTPUTS_DIR) / remote_path)
 
 
@@ -76,6 +77,25 @@ def run_inference(
 ) -> str:
     import subprocess
 
+    required_runtime_pkgs = [
+        ("einops", "einops"),
+        ("whisper", "openai-whisper"),
+        ("scipy", "scipy"),
+        ("PIL", "pillow"),
+        ("imageio", "imageio"),
+        ("safetensors", "safetensors"),
+        ("transformers", "transformers"),
+        ("diffusers", "diffusers"),
+        ("yaml", "pyyaml"),
+        ("pydantic", "pydantic"),
+        ("unfoldNd", "unfoldNd"),
+    ]
+    for module_name, package_name in required_runtime_pkgs:
+        try:
+            __import__(module_name)
+        except ModuleNotFoundError:
+            subprocess.run(["python", "-m", "pip", "install", package_name], check=True)
+
     cmd = [
         "python",
         "-m",
@@ -93,8 +113,16 @@ def run_inference(
     if config_path:
         cmd.extend(["--config-load-path", config_path])
 
+    dist_env = os.environ.copy()
+    dist_env.setdefault("RANK", "0")
+    dist_env.setdefault("WORLD_SIZE", "1")
+    dist_env.setdefault("LOCAL_RANK", "0")
+    dist_env.setdefault("LOCAL_WORLD_SIZE", "1")
+    dist_env.setdefault("MASTER_ADDR", "127.0.0.1")
+    dist_env.setdefault("MASTER_PORT", "29500")
+
     print("Running:", " ".join(shlex.quote(x) for x in cmd))
-    subprocess.run(cmd, check=True, cwd=REPO_DIR)
+    subprocess.run(cmd, check=True, cwd=REPO_DIR, env=dist_env)
 
     outputs_volume.commit()
     return output_path

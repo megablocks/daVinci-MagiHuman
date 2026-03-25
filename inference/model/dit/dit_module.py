@@ -22,11 +22,28 @@ import torch.nn as nn
 from einops import rearrange, repeat
 from inference.common import Modality, VarlenHandler, is_hopper_arch
 from inference.infra.parallelism import ulysses_scheduler
-from magi_compiler import magi_compile
-from magi_compiler.api import magi_register_custom_op
-from magi_compiler.config import CompileConfig
 from torch import Tensor
 from torch.nn import Parameter
+
+try:
+    from magi_compiler import magi_compile
+    from magi_compiler.api import magi_register_custom_op
+    from magi_compiler.config import CompileConfig
+except ModuleNotFoundError:
+    def magi_compile(*args, **kwargs):
+        def _decorator(obj):
+            return obj
+
+        return _decorator
+
+    def magi_register_custom_op(*args, **kwargs):
+        def _decorator(func):
+            return func
+
+        return _decorator
+
+    class CompileConfig:  # type: ignore[no-redef]
+        pass
 
 
 @dataclass
@@ -515,7 +532,7 @@ def flash_attn_with_cp(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, cp_spl
         k = k.unsqueeze(0)
         v = v.unsqueeze(0)
 
-    self_attn_out = torch.ops.infra.flash_attn_func(q, k, v).squeeze(0)
+    self_attn_out = flash_attn_func(q, k, v).squeeze(0)
 
     if get_cp_world_size() > 1:
         self_attn_out = scatter_seqlen_gather_head(self_attn_out, cp_split_sizes, get_cp_group(), async_op=False)
@@ -546,7 +563,7 @@ def flex_flash_attn_with_cp(
     if get_cp_world_size() > 1:
         q, k, v = batch_scatter_head_gather_seqlen([q, k, v], cp_split_sizes, get_cp_group())
 
-    out, _ = torch.ops.infra.flex_flash_attn_func(q, k, v, q_ranges=q_ranges, k_ranges=k_ranges)
+    out, _ = flex_flash_attn_func(q, k, v, q_ranges=q_ranges, k_ranges=k_ranges)
 
     if get_cp_world_size() > 1:
         out = scatter_seqlen_gather_head(out, cp_split_sizes, get_cp_group(), async_op=False)
