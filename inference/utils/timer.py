@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
+from datetime import datetime, timezone
+from time import monotonic
 from typing import Callable
 
 import torch
@@ -38,6 +39,7 @@ class EventPathTimer:
         """
         self.prev_message: str = None
         self.prev_time: datetime = None
+        self.prev_monotonic: float = None
 
     def reset(self):
         """
@@ -48,6 +50,7 @@ class EventPathTimer:
         """
         self.prev_message = None
         self.prev_time = None
+        self.prev_monotonic = None
 
     def synced_record(self, message, print_fn: Callable[[str], None] = print_rank_0):
         """
@@ -61,13 +64,16 @@ class EventPathTimer:
         It then logs the elapsed time along with the previous and current messages.
         """
         torch.cuda.synchronize()
-        current_time = datetime.now()
-        if self.prev_message is not None:
+        current_time = datetime.now(timezone.utc)
+        current_monotonic = monotonic()
+        if self.prev_message is not None and self.prev_time is not None and self.prev_monotonic is not None:
+            elapsed_seconds = current_monotonic - self.prev_monotonic
             print_fn(
-                f"\nTime Elapsed: [{current_time - self.prev_time}] From [{self.prev_message} ({self.prev_time})] To [{message} ({current_time})]"
+                f"\nTime Elapsed: [{elapsed_seconds:.3f}s] From [{self.prev_message} ({self.prev_time.isoformat()})] To [{message} ({current_time.isoformat()})]"
             )
         self.prev_message = message
         self.prev_time = current_time
+        self.prev_monotonic = current_monotonic
 
 
 _GLOBAL_LIGHT_TIMER = EventPathTimer()
